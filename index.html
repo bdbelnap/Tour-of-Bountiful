@@ -4,16 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tour of Bountiful 2026</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- React and Babel (Runs the code in the browser) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Firebase Compat Scripts: Much more stable for single-file sites -->
+    <!-- Stable Firebase Compat Scripts -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -21,17 +18,17 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f5f5f4; }
-        .status-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .status-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
         
-        // YOUR KEYS FROM THE SCREENSHOT
+        // YOUR FIREBASE KEYS
         const firebaseConfig = {
             apiKey: "AIzaSyCdVLXV3UNVkgusZ8UcaYXAKDjw-aH3-iE",
             authDomain: "tour-of-bountiful.firebaseapp.com",
@@ -43,11 +40,9 @@
 
         const MAX_TEAMS = 9;
         const TOURNAMENT_DATE = "Date TBD";
-        const ADMIN_UID = ""; // Add your ID here to edit any team
+        const ADMIN_UID = ""; 
 
-        // Components for Icons
         const Mountain = () => <i data-lucide="mountain"></i>;
-        const DollarSign = () => <i data-lucide="dollar-sign"></i>;
         const Calendar = () => <i data-lucide="calendar"></i>;
         const Target = () => <i data-lucide="target"></i>;
         const CheckCircle2 = () => <i data-lucide="check-circle-2"></i>;
@@ -65,23 +60,17 @@
             const [showSuccess, setShowSuccess] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [formData, setFormData] = useState({ 
-                teamName: '', email: '', 
-                p1Name: '', p1Handicap: '', 
-                p2Name: '', p2Handicap: '', 
-                p3Name: '', p3Handicap: '', 
-                p4Name: '', p4Handicap: '' 
+                teamName: '', email: '', p1Name: '', p1Handicap: '', p2Name: '', p2Handicap: '', p3Name: '', p3Handicap: '', p4Name: '', p4Handicap: '' 
             });
 
-            // Initialize Firebase
-            useEffect(() => {
+            // Reliable Firebase Setup
+            const connect = () => {
+                if (!window.firebase) return;
                 try {
-                    if (!window.firebase) {
-                        setConnStatus("Error: Firebase script failed to load");
-                        return;
-                    }
-                    const app = firebase.initializeApp(firebaseConfig);
+                    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
                     const _db = firebase.firestore();
                     const _auth = firebase.auth();
+                    
                     setDb(_db);
                     
                     _auth.signInAnonymously()
@@ -91,27 +80,27 @@
                         })
                         .catch(err => {
                             console.error(err);
-                            setConnStatus("Error: Enable 'Anonymous' in Firebase Auth");
+                            setConnStatus("Error: Check Firebase Auth Settings");
                         });
 
-                    // Real-time listener
-                    const unsub = _db.collection("registrations").onSnapshot(
+                    _db.collection("registrations").onSnapshot(
                         (snap) => {
-                            const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                            setRegistrations(data);
+                            setRegistrations(snap.docs.map(d => ({id: d.id, ...d.data()})));
+                            setConnStatus("Connected");
                         },
                         (err) => {
                             console.error(err);
-                            setConnStatus("Error: Database Rules Denied (Use Test Mode)");
+                            setConnStatus("Error: Database Rules Denied");
                         }
                     );
-                    
-                    lucide.createIcons();
-                    return () => unsub();
-                } catch (e) {
-                    console.error(e);
-                    setConnStatus("Error: Check config keys");
-                }
+                } catch (e) { setConnStatus("Error: Check Config"); }
+            };
+
+            useEffect(() => {
+                connect();
+                const timer = setInterval(() => { if (connStatus !== "Connected") connect(); }, 5000);
+                setTimeout(() => lucide.createIcons(), 500);
+                return () => clearInterval(timer);
             }, []);
 
             useEffect(() => { lucide.createIcons(); }, [view, registrations, showSuccess, connStatus]);
@@ -119,31 +108,21 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (connStatus !== "Connected") {
-                    alert(`Database issue: ${connStatus}`);
+                    alert(`Not connected yet. Current Status: ${connStatus}`);
                     return;
                 }
                 setIsSubmitting(true);
                 try {
+                    const data = { ...formData, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
                     if (editingId) {
-                        await db.collection("registrations").doc(editingId).update({
-                            ...formData, 
-                            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-                        });
+                        await db.collection("registrations").doc(editingId).update(data);
                     } else {
-                        await db.collection("registrations").add({
-                            ...formData, 
-                            userId: user.uid, 
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        });
+                        await db.collection("registrations").add({ ...data, userId: user.uid });
                     }
                     setShowSuccess(true);
-                    setTimeout(() => { 
-                        setShowSuccess(false); 
-                        setView('players'); 
-                        setEditingId(null); 
-                    }, 2000);
+                    setTimeout(() => { setShowSuccess(false); setView('players'); setEditingId(null); }, 2000);
                 } catch (err) { 
-                    alert("Submission failed. Ensure Firestore is in 'Test Mode'.");
+                    alert("Submission failed. Ensure Firestore Database is in 'Test Mode'.");
                 }
                 setIsSubmitting(false);
             };
@@ -159,8 +138,8 @@
                                 <span className="font-bold text-xl uppercase italic tracking-tighter">Tour of <span className="text-emerald-700">Bountiful</span></span>
                             </div>
                             <div className="flex items-center gap-6">
-                                <button onClick={() => setView('players')} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-700">The Field</button>
-                                <button onClick={() => { setView('register'); setEditingId(null); }} disabled={registrations.length >= MAX_TEAMS && !editingId} className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase italic tracking-tighter transition-all ${registrations.length >= MAX_TEAMS && !editingId ? 'bg-stone-200 text-stone-400' : 'bg-emerald-700 text-white shadow-md hover:bg-emerald-800'}`}>Sign Up</button>
+                                <button onClick={() => setView('players')} className="text-[10px] font-black uppercase text-slate-500">The Field</button>
+                                <button onClick={() => { setView('register'); setEditingId(null); }} className="px-4 py-2 rounded-lg font-black text-[10px] uppercase italic bg-emerald-700 text-white shadow-md">Sign Up</button>
                             </div>
                         </div>
                     </nav>
@@ -169,23 +148,23 @@
                         {view === 'home' && (
                             <div className="space-y-12">
                                 <section className="relative rounded-[3rem] overflow-hidden bg-emerald-950 text-white py-24 px-8 md:px-16 shadow-2xl min-h-[500px] flex items-center">
-                                    <div className="absolute inset-0 opacity-50 bg-cover bg-center" style={{backgroundImage: "url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?q=80&w=2070')"}}></div>
+                                    <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{backgroundImage: "url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?q=80&w=2070')"}}></div>
                                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-950 via-emerald-950/70 to-transparent"></div>
-                                    <div className="relative z-10 max-w-2xl">
+                                    <div className="relative z-10 max-w-2xl text-left">
                                         <div className="flex items-center gap-2 mb-6 uppercase tracking-widest text-[10px] font-black text-emerald-400"><Calendar /> {TOURNAMENT_DATE}</div>
-                                        <h1 className="text-5xl md:text-8xl font-black mb-2 uppercase italic leading-none tracking-tighter">Tour of <br/><span className="text-emerald-400">Bountiful</span></h1>
+                                        <h1 className="text-6xl md:text-8xl font-black mb-2 uppercase italic leading-none tracking-tighter">Tour of <br/><span className="text-emerald-400">Bountiful</span></h1>
                                         <p className="text-2xl font-black mb-8 uppercase italic opacity-90 tracking-tighter">54 holes.</p>
-                                        <button onClick={() => setView('register')} className="bg-white text-emerald-900 px-10 py-5 rounded-xl font-black text-xl uppercase italic shadow-xl tracking-tighter hover:bg-stone-50 transition-colors">Sign My Team Up</button>
+                                        <button onClick={() => setView('register')} className="bg-white text-emerald-900 px-10 py-5 rounded-xl font-black text-xl uppercase italic shadow-xl tracking-tighter">Sign My Team Up</button>
                                     </div>
                                 </section>
                                 <div className="grid md:grid-cols-2 gap-8">
                                     <div className="bg-white p-10 rounded-[2.5rem] border border-stone-200 shadow-sm flex gap-6">
                                         <div className="text-emerald-700 bg-emerald-50 p-4 rounded-xl h-fit"><Target size={32} /></div>
-                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Net Score Wins</h3><p className="text-slate-500 text-sm leading-relaxed">Handicaps level the field across Eaglewood, Bountiful Ridge, and Lakeside.</p></div>
+                                        <div><h3 className="text-2xl font-black uppercase italic mb-2">Net Score Wins</h3><p className="text-slate-500 text-sm">Every stroke counts across Eaglewood, Bountiful Ridge, and Lakeside.</p></div>
                                     </div>
                                     <div className="bg-white p-10 rounded-[2.5rem] border border-stone-200 shadow-sm flex gap-6">
-                                        <div className="text-emerald-700 bg-emerald-50 p-4 rounded-xl h-fit"><DollarSign size={32} /></div>
-                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Prize Pool</h3><p className="text-slate-500 text-sm leading-relaxed">Winner takes the pot for the low net total across all three courses.</p></div>
+                                        <div className="bg-emerald-50 p-4 rounded-xl h-fit text-emerald-700 italic font-black text-2xl flex items-center justify-center">$</div>
+                                        <div><h3 className="text-2xl font-black uppercase italic mb-2">Prize Pool</h3><p className="text-slate-500 text-sm">Low net total takes the pot. Stakes collected at the first tee.</p></div>
                                     </div>
                                 </div>
                             </div>
@@ -193,29 +172,23 @@
 
                         {view === 'register' && (
                             <div className="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border border-stone-200 overflow-hidden">
-                                <div className="bg-emerald-800 p-10 text-white"><h2 className="text-4xl font-black uppercase italic tracking-tighter">{editingId ? 'Edit Team' : 'Register Team'}</h2><p className="text-[10px] font-black uppercase text-emerald-200 tracking-widest mt-2">{TOURNAMENT_DATE}</p></div>
-                                {showSuccess ? <div className="p-20 text-center flex flex-col items-center"><div className="text-emerald-600 mb-4"><CheckCircle2 size={64} /></div><h3 className="text-2xl font-black uppercase italic tracking-tighter">Success!</h3></div> : (
+                                <div className="bg-emerald-800 p-10 text-white"><h2 className="text-4xl font-black uppercase italic tracking-tighter">{editingId ? 'Edit Team' : 'Register Team'}</h2></div>
+                                {showSuccess ? <div className="p-20 text-center flex flex-col items-center"><CheckCircle2 size={64} className="text-emerald-600 mb-4" /><h3 className="text-2xl font-black uppercase italic">Team Registered!</h3></div> : (
                                     <form onSubmit={handleSubmit} className="p-10 space-y-6">
                                         <div className="grid gap-4">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-slate-400">Team Name</label>
-                                                <input required value={formData.teamName} onChange={(e) => setFormData({...formData, teamName: e.target.value})} className="w-full p-4 bg-stone-50 rounded-xl border border-stone-200 font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-slate-400">Captain Email</label>
-                                                <input required type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full p-4 bg-stone-50 rounded-xl border border-stone-200 font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
-                                            </div>
+                                            <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400">Team Name</label><input required value={formData.teamName} onChange={(e) => setFormData({...formData, teamName: e.target.value})} className="w-full p-4 bg-stone-50 rounded-xl border border-stone-200 font-bold outline-none" /></div>
+                                            <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400">Email</label><input required type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full p-4 bg-stone-50 rounded-xl border border-stone-200 font-bold outline-none" /></div>
                                         </div>
                                         <div className="space-y-4 pt-4 border-t border-stone-100">
                                             {[1, 2, 3, 4].map(n => (
                                                 <div key={n} className="grid grid-cols-2 gap-4">
-                                                    <input required placeholder={`Player ${n} Name`} value={formData[`p${n}Name`]} onChange={(e) => setFormData({...formData, [`p${n}Name`]: e.target.value})} className="p-3 bg-stone-50 rounded-lg border border-stone-200 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
-                                                    <input required type="number" step="0.1" placeholder="Handicap" value={formData[`p${n}Handicap`]} onChange={(e) => setFormData({...formData, [`p${n}Handicap`]: e.target.value})} className="p-3 bg-stone-50 rounded-lg border border-stone-200 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                                                    <input required placeholder={`Player ${n} Name`} value={formData[`p${n}Name`]} onChange={(e) => setFormData({...formData, [`p${n}Name`]: e.target.value})} className="p-3 bg-stone-50 rounded-lg border border-stone-200 font-bold text-sm outline-none" />
+                                                    <input required type="number" step="0.1" placeholder="Handicap" value={formData[`p${n}Handicap`]} onChange={(e) => setFormData({...formData, [`p${n}Handicap`]: e.target.value})} className="p-3 bg-stone-50 rounded-lg border border-stone-200 font-bold text-sm outline-none" />
                                                 </div>
                                             ))}
                                         </div>
-                                        <button type="submit" disabled={isSubmitting} className="w-full py-5 bg-emerald-700 text-white rounded-xl font-black text-xl uppercase italic shadow-lg flex justify-center items-center gap-2 hover:bg-emerald-800 transition-colors">
-                                            {isSubmitting ? <Loader2 /> : editingId ? 'Update Team' : 'Register Team'}
+                                        <button type="submit" disabled={isSubmitting} className="w-full py-5 bg-emerald-700 text-white rounded-xl font-black text-xl uppercase italic shadow-lg flex justify-center items-center gap-2">
+                                            {isSubmitting ? <Loader2 /> : 'Register Team'}
                                         </button>
                                     </form>
                                 )}
@@ -224,18 +197,21 @@
 
                         {view === 'players' && (
                             <div className="max-w-4xl mx-auto space-y-8">
-                                <div className="text-center"><h2 className="text-5xl font-black uppercase italic tracking-tighter">The Field</h2><p className="text-emerald-700 font-black uppercase text-[10px] mt-2">{registrations.length} of {MAX_TEAMS} Teams Locked In</p></div>
+                                <div className="text-center"><h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">The Field</h2><p className="text-emerald-700 font-black uppercase text-[10px] mt-2">{registrations.length} Teams Confirmed</p></div>
                                 <div className="grid gap-6">
-                                    {registrations.length === 0 ? <div className="text-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-stone-200 text-slate-300 font-black uppercase italic text-2xl tracking-tighter">The Field is Empty</div> : registrations.map(reg => (
+                                    {registrations.length === 0 ? <div className="text-center py-20 bg-white rounded-[2rem] border border-stone-200 text-slate-300 font-black uppercase italic text-2xl tracking-tighter leading-none">No teams yet</div> : registrations.map(reg => (
                                         <div key={reg.id} className="bg-white p-8 rounded-[2rem] border border-stone-200 shadow-sm hover:border-emerald-500 transition-all group">
                                             <div className="flex justify-between items-center mb-6 pb-6 border-b border-stone-100">
                                                 <h3 className="font-black text-3xl uppercase italic tracking-tighter leading-none">{reg.teamName}</h3>
-                                                {canEdit(reg) && <button onClick={() => { setEditingId(reg.id); setFormData({...reg}); setView('register'); window.scrollTo(0,0); }} className="p-3 bg-stone-100 text-stone-600 rounded-xl font-black text-[10px] uppercase italic flex items-center gap-2 hover:bg-emerald-100 transition-colors"><Edit2 size={12} /> Edit</button>}
+                                                <div className="flex items-center gap-3">
+                                                    {canEdit(reg) && <button onClick={() => { setEditingId(reg.id); setFormData({...reg}); setView('register'); window.scrollTo(0,0); }} className="p-3 bg-stone-100 text-stone-600 rounded-xl font-black text-[10px] uppercase italic tracking-tighter flex items-center gap-2"><Edit2 size={12} /> Edit</button>}
+                                                    <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase italic tracking-tighter">Locked In</div>
+                                                </div>
                                             </div>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                 {[1, 2, 3, 4].map(n => (
                                                     <div key={n} className="bg-stone-50 p-4 rounded-xl border border-stone-100 group-hover:bg-emerald-50 transition-colors">
-                                                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-1"><span>P{n}</span><span className="text-emerald-600 font-black">HC: {reg[`p${n}Handicap`]}</span></div>
+                                                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-1 tracking-tighter"><span>P{n}</span><span className="text-emerald-600 font-black">HC: {reg[`p${n}Handicap`]}</span></div>
                                                         <div className="font-bold text-slate-800 truncate text-sm leading-none">{reg[`p${n}Name`]}</div>
                                                     </div>
                                                 ))}
@@ -247,23 +223,22 @@
                         )}
                     </main>
 
-                    {/* STATUS BAR */}
+                    {/* DYNAMIC STATUS BAR */}
                     <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white py-2 px-4 flex justify-between items-center text-[10px] font-black uppercase tracking-widest border-t border-slate-800 shadow-2xl z-[100]">
                         <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={connect}>
                                 <div className={`w-2 h-2 rounded-full ${connStatus === 'Connected' ? 'bg-emerald-400' : 'bg-amber-400 status-pulse'}`}></div>
                                 <span>STATUS: {connStatus}</span>
                             </div>
-                            {user && <span>USER ID: {user.uid}</span>}
+                            {user && <span>ID: {user.uid.substring(0,8)}</span>}
                         </div>
                         <div className="flex items-center gap-2 opacity-50 italic">
-                             <Settings size={12} /> <span>V2.1 RELIABLE LOAD</span>
+                             <Settings size={12} /> <span>V2.3 FINAL MASTER</span>
                         </div>
                     </div>
                 </div>
             );
         };
-
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
