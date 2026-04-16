@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Stable Firebase Scripts -->
+    <!-- Ultra-stable Firebase Compat Scripts -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -28,41 +28,39 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
         
-        // --- HAND-TYPED KEYS FROM YOUR SCREENSHOT ---
+        // YOUR KEYS HAND-CLEANED FOR ACCURACY
         const firebaseConfig = {
             apiKey: "AIzaSyCdVLXV3UNVkgusZ8UcaYXAKDjw-aH3-iE",
             authDomain: "tour-of-bountiful.firebaseapp.com",
             projectId: "tour-of-bountiful",
             storageBucket: "tour-of-bountiful.firebasestorage.app",
             messagingSenderId: "805576976058",
-            appId: "1:805576976058:web:076572b23cf4f1b23dc483",
-            measurementId: "G-5DPMZ6H2DT"
+            appId: "1:805576976058:web:076572b23cf4f1b23dc483"
         };
 
         const MAX_TEAMS = 9;
         const TOURNAMENT_DATE = "Date TBD";
-        const ADMIN_UID = ""; 
 
+        // Icons
         const Mountain = () => <i data-lucide="mountain"></i>;
         const Calendar = () => <i data-lucide="calendar"></i>;
         const Target = () => <i data-lucide="target"></i>;
         const CheckCircle2 = () => <i data-lucide="check-circle-2"></i>;
         const Edit2 = () => <i data-lucide="edit-2"></i>;
         const Settings = () => <i data-lucide="settings"></i>;
+        const AlertTriangle = () => <i data-lucide="alert-triangle"></i>;
         const Loader2 = () => <i data-lucide="loader-2" className="animate-spin"></i>;
 
         const App = () => {
             const [db, setDb] = useState(null);
             const [user, setUser] = useState(null);
-            const [connStatus, setConnStatus] = useState("Connecting...");
+            const [connStatus, setConnStatus] = useState("Initializing...");
+            const [debugInfo, setDebugInfo] = useState("");
             const [view, setView] = useState('home');
             const [registrations, setRegistrations] = useState([]);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [showSuccess, setShowSuccess] = useState(false);
-            const [editingId, setEditingId] = useState(null);
-            const [formData, setFormData] = useState({ 
-                teamName: '', email: '', p1Name: '', p1Handicap: '', p2Name: '', p2Handicap: '', p3Name: '', p3Handicap: '', p4Name: '', p4Handicap: '' 
-            });
+            const [formData, setFormData] = useState({ teamName: '', email: '', p1Name: '', p1Handicap: '', p2Name: '', p2Handicap: '', p3Name: '', p3Handicap: '', p4Name: '', p4Handicap: '' });
 
             const connect = () => {
                 if (!window.firebase) return;
@@ -76,17 +74,27 @@
                         .then((cred) => {
                             setUser(cred.user);
                             setConnStatus("Connected");
+                            setDebugInfo("");
                         })
-                        .catch(err => setConnStatus(`Auth Error: ${err.message}`));
+                        .catch(err => {
+                            setConnStatus("Auth Error");
+                            setDebugInfo(err.message);
+                        });
 
                     _db.collection("registrations").onSnapshot(
                         (snap) => {
                             setRegistrations(snap.docs.map(d => ({id: d.id, ...d.data()})));
-                            setConnStatus("Connected");
+                            if (connStatus === "Initializing...") setConnStatus("Connected");
                         },
-                        (err) => setConnStatus(`DB Error: ${err.message}`)
+                        (err) => {
+                            setConnStatus("Database Error");
+                            setDebugInfo(err.message);
+                        }
                     );
-                } catch (e) { setConnStatus("Error: Configuration Failed"); }
+                } catch (e) { 
+                    setConnStatus("Config Error");
+                    setDebugInfo(e.message);
+                }
             };
 
             useEffect(() => {
@@ -101,43 +109,37 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (connStatus !== "Connected") {
-                    alert(`Status: ${connStatus}. Please wait for the green light.`);
+                    alert(`Cannot register while status is: ${connStatus}`);
                     return;
                 }
                 setIsSubmitting(true);
                 try {
-                    const data = { ...formData, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
-                    if (editingId) {
-                        await db.collection("registrations").doc(editingId).update(data);
-                    } else {
-                        await db.collection("registrations").add({ ...data, userId: user.uid });
-                    }
+                    const data = { ...formData, timestamp: firebase.firestore.FieldValue.serverTimestamp(), userId: user.uid };
+                    await db.collection("registrations").add(data);
                     setShowSuccess(true);
-                    setTimeout(() => { setShowSuccess(false); setView('players'); setEditingId(null); }, 2000);
+                    setTimeout(() => { setShowSuccess(false); setView('players'); }, 2000);
                 } catch (err) { alert(`Error: ${err.message}`); }
                 setIsSubmitting(false);
             };
 
-            const canEdit = (reg) => user && (user.uid === reg.userId || user.uid === ADMIN_UID);
-
             return (
-                <div className="min-h-screen bg-stone-50 font-sans text-slate-900 pb-16">
+                <div className="min-h-screen bg-stone-50 font-sans text-slate-900 pb-20">
                     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-stone-200">
                         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
                             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
                                 <div className="bg-emerald-700 p-2 rounded-lg text-white flex items-center"><Mountain /></div>
-                                <span className="font-bold text-xl uppercase italic tracking-tighter">Tour of <span className="text-emerald-700">Bountiful</span></span>
+                                <span className="font-bold text-xl uppercase italic tracking-tighter leading-none">Tour of <span className="text-emerald-700">Bountiful</span></span>
                             </div>
                             <div className="flex items-center gap-6">
-                                <button onClick={() => setView('players')} className="text-[10px] font-black uppercase text-slate-500 hover:text-emerald-700">The Field</button>
-                                <button onClick={() => { setView('register'); setEditingId(null); }} className="px-4 py-2 rounded-lg font-black text-[10px] uppercase italic bg-emerald-700 text-white shadow-md hover:bg-emerald-800">Sign Up</button>
+                                <button onClick={() => setView('players')} className="text-[10px] font-black uppercase text-slate-500">The Field</button>
+                                <button onClick={() => setView('register')} className="px-4 py-2 rounded-lg font-black text-[10px] uppercase italic bg-emerald-700 text-white shadow-md">Sign Up</button>
                             </div>
                         </div>
                     </nav>
 
                     <main className="max-w-7xl mx-auto px-4 py-8">
                         {view === 'home' && (
-                            <div className="space-y-12">
+                            <div className="space-y-12 animate-in fade-in duration-700">
                                 <section className="relative rounded-[3rem] overflow-hidden bg-emerald-950 text-white py-24 px-8 md:px-16 shadow-2xl min-h-[500px] flex items-center">
                                     <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{backgroundImage: "url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?q=80&w=2070')"}}></div>
                                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-950 via-emerald-950/70 to-transparent"></div>
@@ -154,16 +156,16 @@
                                         <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Net Score Wins</h3><p className="text-slate-500 text-sm">Every stroke counts across Eaglewood, Bountiful Ridge, and Lakeside.</p></div>
                                     </div>
                                     <div className="bg-white p-10 rounded-[2.5rem] border border-stone-200 shadow-sm flex gap-6">
-                                        <div className="bg-emerald-50 p-4 rounded-xl h-fit text-emerald-700 italic font-black text-2xl flex items-center justify-center">$</div>
-                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Prize Pool</h3><p className="text-slate-500 text-sm">Low net total takes the pot. Stakes collected at the first tee.</p></div>
+                                        <div className="bg-emerald-50 p-4 rounded-xl h-fit text-emerald-700 italic font-black text-2xl flex items-center justify-center font-serif">$</div>
+                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Prize Pool</h3><p className="text-slate-500 text-sm">Winner takes the pot for the low net total across 54 holes.</p></div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         {view === 'register' && (
-                            <div className="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border border-stone-200 overflow-hidden">
-                                <div className="bg-emerald-800 p-10 text-white"><h2 className="text-4xl font-black uppercase italic tracking-tighter">{editingId ? 'Edit Team' : 'Register Team'}</h2></div>
+                            <div className="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border border-stone-200 overflow-hidden animate-in zoom-in-95 duration-300">
+                                <div className="bg-emerald-800 p-10 text-white"><h2 className="text-4xl font-black uppercase italic tracking-tighter leading-none">Register Team</h2></div>
                                 {showSuccess ? <div className="p-20 text-center flex flex-col items-center"><CheckCircle2 size={64} className="text-emerald-600 mb-4" /><h3 className="text-2xl font-black uppercase italic">Team Registered!</h3></div> : (
                                     <form onSubmit={handleSubmit} className="p-10 space-y-6">
                                         <div className="grid gap-4">
@@ -174,12 +176,12 @@
                                             {[1, 2, 3, 4].map(n => (
                                                 <div key={n} className="grid grid-cols-2 gap-4">
                                                     <input required placeholder={`Player ${n} Name`} value={formData[`p${n}Name`]} onChange={(e) => setFormData({...formData, [`p${n}Name`]: e.target.value})} className="p-3 bg-stone-50 rounded-lg border border-stone-200 font-bold text-sm outline-none" />
-                                                    <input required type="number" step="0.1" placeholder="Handicap" value={formData[`p${n}Handicap`]} onChange={(e) => setFormData({...formData, [`p${n}Handicap`]: e.target.value})} className="p-3 bg-stone-50 rounded-lg border border-stone-200 font-bold text-sm outline-none" />
+                                                    <input required type="number" step="0.1" placeholder="HC" value={formData[`p${n}Handicap`]} onChange={(e) => setFormData({...formData, [`p${n}Handicap`]: e.target.value})} className="p-3 bg-stone-50 rounded-lg border border-stone-200 font-bold text-sm outline-none" />
                                                 </div>
                                             ))}
                                         </div>
-                                        <button type="submit" disabled={isSubmitting} className="w-full py-5 bg-emerald-700 text-white rounded-xl font-black text-xl uppercase italic shadow-lg flex justify-center items-center gap-2">
-                                            {isSubmitting ? <Loader2 /> : 'Register Team'}
+                                        <button type="submit" disabled={isSubmitting || connStatus !== 'Connected'} className="w-full py-5 bg-emerald-700 text-white rounded-xl font-black text-xl uppercase italic shadow-lg flex justify-center items-center gap-2 disabled:bg-stone-300">
+                                            {isSubmitting ? <Loader2 /> : connStatus === 'Connected' ? 'Register Team' : 'Wait for Connection...'}
                                         </button>
                                     </form>
                                 )}
@@ -194,15 +196,12 @@
                                         <div key={reg.id} className="bg-white p-8 rounded-[2rem] border border-stone-200 shadow-sm hover:border-emerald-500 transition-all group">
                                             <div className="flex justify-between items-center mb-6 pb-6 border-b border-stone-100">
                                                 <h3 className="font-black text-3xl uppercase italic tracking-tighter leading-none">{reg.teamName}</h3>
-                                                <div className="flex items-center gap-3">
-                                                    {canEdit(reg) && <button onClick={() => { setEditingId(reg.id); setFormData({...reg}); setView('register'); window.scrollTo(0,0); }} className="p-3 bg-stone-100 text-stone-600 rounded-xl font-black text-[10px] uppercase italic tracking-tighter flex items-center gap-2"><Edit2 size={12} /> Edit</button>}
-                                                    <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase italic tracking-tighter">Locked In</div>
-                                                </div>
+                                                <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase italic tracking-tighter">Locked In</div>
                                             </div>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                 {[1, 2, 3, 4].map(n => (
                                                     <div key={n} className="bg-stone-50 p-4 rounded-xl border border-stone-100 group-hover:bg-emerald-50 transition-colors">
-                                                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-1 tracking-tighter"><span>P{n}</span><span className="text-emerald-600 font-black">HC: {reg[`p${n}Handicap`]}</span></div>
+                                                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-1"><span>P{n}</span><span className="text-emerald-600 font-black">HC: {reg[`p${n}Handicap`]}</span></div>
                                                         <div className="font-bold text-slate-800 truncate text-sm leading-none">{reg[`p${n}Name`]}</div>
                                                     </div>
                                                 ))}
@@ -214,18 +213,25 @@
                         )}
                     </main>
 
-                    {/* DYNAMIC STATUS BAR */}
-                    <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white py-2 px-4 flex justify-between items-center text-[10px] font-black uppercase tracking-widest border-t border-slate-800 shadow-2xl z-[100]">
+                    {/* DYNAMIC STATUS BAR - THE FIXER */}
+                    <div className={`fixed bottom-0 left-0 right-0 py-3 px-6 text-[10px] font-black uppercase tracking-widest border-t shadow-2xl z-[100] flex flex-col md:flex-row justify-between items-center transition-all ${connStatus === 'Connected' ? 'bg-emerald-900 text-emerald-100 border-emerald-800' : 'bg-red-900 text-red-100 border-red-800'}`}>
                         <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2 cursor-pointer" onClick={connect}>
-                                <div className={`w-2 h-2 rounded-full ${connStatus === 'Connected' ? 'bg-emerald-400' : 'bg-amber-400 status-pulse'}`}></div>
+                            <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${connStatus === 'Connected' ? 'bg-emerald-400' : 'bg-red-400 status-pulse'}`}></div>
                                 <span>STATUS: {connStatus}</span>
                             </div>
-                            {user && <span>ID: {user.uid.substring(0,8)}</span>}
+                            {debugInfo && <span className="opacity-70 font-mono italic select-all">LOG: {debugInfo}</span>}
                         </div>
-                        <div className="flex items-center gap-2 opacity-50 italic">
-                             <Settings size={12} /> <span>V2.5 FINAL MASTER</span>
-                        </div>
+                        
+                        {connStatus !== 'Connected' && (
+                            <div className="flex items-center gap-3 mt-2 md:mt-0">
+                                <div className="flex gap-1 items-center">
+                                    <AlertTriangle size={12} className="text-amber-400" />
+                                    <span>FINAL CHECKLIST: 1. Enabled Anonymous? 2. Rules in Test Mode? 3. Added Domain to Authorized?</span>
+                                </div>
+                                <button onClick={connect} className="bg-white/10 hover:bg-white/20 px-3 py-1 rounded border border-white/20 transition-all">Retry Now</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
