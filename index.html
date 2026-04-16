@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Ultra-stable Firebase Compat Scripts -->
+    <!-- Stable Firebase Scripts -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -28,8 +28,8 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
         
-        // HAND-TYPED KEYS FROM YOUR SCREENSHOT (V3.0)
-        const firebaseConfig = {
+        // HAND-TYPED KEYS FROM YOUR SCREENSHOT
+        const defaultKeys = {
             apiKey: "AIzaSyCdVLXV3UNVkgusZ8UcaYXAKDjw-aH3-iE",
             authDomain: "tour-of-bountiful.firebaseapp.com",
             projectId: "tour-of-bountiful",
@@ -49,6 +49,7 @@
         const Edit2 = () => <i data-lucide="edit-2"></i>;
         const Settings = () => <i data-lucide="settings"></i>;
         const AlertTriangle = () => <i data-lucide="alert-triangle"></i>;
+        const Wrench = () => <i data-lucide="wrench"></i>;
         const Loader2 = () => <i data-lucide="loader-2" className="animate-spin"></i>;
 
         const App = () => {
@@ -60,16 +61,17 @@
             const [registrations, setRegistrations] = useState([]);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [showSuccess, setShowSuccess] = useState(false);
+            const [showRepair, setShowRepair] = useState(false);
+            const [repairKey, setRepairKey] = useState("");
             const [formData, setFormData] = useState({ teamName: '', email: '', p1Name: '', p1Handicap: '', p2Name: '', p2Handicap: '', p3Name: '', p3Handicap: '', p4Name: '', p4Handicap: '' });
 
-            const connect = () => {
+            const connect = (keys = defaultKeys) => {
                 if (!window.firebase) return;
                 try {
-                    // Force a fresh start
                     if (firebase.apps.length) {
                         firebase.apps.forEach(app => app.delete());
                     }
-                    const app = firebase.initializeApp(firebaseConfig);
+                    const app = firebase.initializeApp(keys);
                     const _db = firebase.firestore();
                     const _auth = firebase.auth();
                     setDb(_db);
@@ -79,6 +81,7 @@
                             setUser(cred.user);
                             setConnStatus("Connected");
                             setDebugInfo("");
+                            setShowRepair(false);
                         })
                         .catch(err => {
                             setConnStatus("Auth Error");
@@ -103,19 +106,14 @@
 
             useEffect(() => {
                 connect();
-                const timer = setInterval(() => { if (connStatus !== "Connected") connect(); }, 5000);
                 setTimeout(() => lucide.createIcons(), 500);
-                return () => clearInterval(timer);
-            }, [connStatus]);
+            }, []);
 
-            useEffect(() => { lucide.createIcons(); }, [view, registrations, showSuccess, connStatus]);
+            useEffect(() => { lucide.createIcons(); }, [view, registrations, showSuccess, connStatus, showRepair]);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (connStatus !== "Connected") {
-                    alert(`Still connecting... Status: ${connStatus}`);
-                    return;
-                }
+                if (connStatus !== "Connected") return;
                 setIsSubmitting(true);
                 try {
                     const data = { ...formData, timestamp: firebase.firestore.FieldValue.serverTimestamp(), userId: user.uid };
@@ -126,24 +124,29 @@
                 setIsSubmitting(false);
             };
 
+            const handleRepair = () => {
+                const newKeys = { ...defaultKeys, apiKey: repairKey.trim() };
+                connect(newKeys);
+            };
+
             return (
                 <div className="min-h-screen bg-stone-50 font-sans text-slate-900 pb-20">
                     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-stone-200">
                         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
                             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
                                 <div className="bg-emerald-700 p-2 rounded-lg text-white flex items-center"><Mountain /></div>
-                                <span className="font-bold text-xl uppercase italic tracking-tighter leading-none">Tour of <span className="text-emerald-700">Bountiful</span></span>
+                                <span className="font-bold text-xl uppercase italic tracking-tighter">Tour of <span className="text-emerald-700">Bountiful</span></span>
                             </div>
                             <div className="flex items-center gap-6">
                                 <button onClick={() => setView('players')} className="text-[10px] font-black uppercase text-slate-500 hover:text-emerald-700">The Field</button>
-                                <button onClick={() => { setView('register'); }} className="px-4 py-2 rounded-lg font-black text-[10px] uppercase italic bg-emerald-700 text-white shadow-md">Sign Up</button>
+                                <button onClick={() => setView('register')} className="px-4 py-2 rounded-lg font-black text-[10px] uppercase italic bg-emerald-700 text-white shadow-md hover:bg-emerald-800">Sign Up</button>
                             </div>
                         </div>
                     </nav>
 
                     <main className="max-w-7xl mx-auto px-4 py-8">
                         {view === 'home' && (
-                            <div className="space-y-12 animate-in fade-in duration-700">
+                            <div className="space-y-12">
                                 <section className="relative rounded-[3rem] overflow-hidden bg-emerald-950 text-white py-24 px-8 md:px-16 shadow-2xl min-h-[500px] flex items-center">
                                     <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{backgroundImage: "url('https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?q=80&w=2070')"}}></div>
                                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-950 via-emerald-950/70 to-transparent"></div>
@@ -157,18 +160,18 @@
                                 <div className="grid md:grid-cols-2 gap-8">
                                     <div className="bg-white p-10 rounded-[2.5rem] border border-stone-200 shadow-sm flex gap-6">
                                         <div className="text-emerald-700 bg-emerald-50 p-4 rounded-xl h-fit"><Target size={32} /></div>
-                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Net Score Wins</h3><p className="text-slate-500 text-sm leading-relaxed">Handicaps level the field. Every stroke counts across Eaglewood, Bountiful Ridge, and Lakeside.</p></div>
+                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter leading-none">Net Score Wins</h3><p className="text-slate-500 text-sm mt-2 leading-relaxed">Handicaps level the field. Every stroke counts across Eaglewood, Bountiful Ridge, and Lakeside.</p></div>
                                     </div>
                                     <div className="bg-white p-10 rounded-[2.5rem] border border-stone-200 shadow-sm flex gap-6">
                                         <div className="bg-emerald-50 p-4 rounded-xl h-fit text-emerald-700 italic font-black text-2xl flex items-center justify-center font-serif">$</div>
-                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Prize Pool</h3><p className="text-slate-500 text-sm leading-relaxed">Winner takes the pot for the low net total across 54 holes.</p></div>
+                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter leading-none">Prize Pool</h3><p className="text-slate-500 text-sm mt-2 leading-relaxed">Winner takes the pot for the low net total across 54 holes. Stakes collected at start.</p></div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         {view === 'register' && (
-                            <div className="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border border-stone-200 overflow-hidden animate-in zoom-in-95 duration-300">
+                            <div className="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border border-stone-200 overflow-hidden">
                                 <div className="bg-emerald-800 p-10 text-white"><h2 className="text-4xl font-black uppercase italic tracking-tighter leading-none">Register Team</h2></div>
                                 {showSuccess ? <div className="p-20 text-center flex flex-col items-center"><CheckCircle2 size={64} className="text-emerald-600 mb-4" /><h3 className="text-2xl font-black uppercase italic tracking-tighter leading-none">Team Registered!</h3></div> : (
                                     <form onSubmit={handleSubmit} className="p-10 space-y-6">
@@ -184,8 +187,8 @@
                                                 </div>
                                             ))}
                                         </div>
-                                        <button type="submit" disabled={isSubmitting || connStatus !== 'Connected'} className="w-full py-5 bg-emerald-700 text-white rounded-xl font-black text-xl uppercase italic shadow-lg flex justify-center items-center gap-2 disabled:bg-stone-300 transition-colors">
-                                            {isSubmitting ? <Loader2 className="animate-spin" /> : connStatus === 'Connected' ? 'Register Team' : 'Wait for Connection...'}
+                                        <button type="submit" disabled={isSubmitting || connStatus !== 'Connected'} className="w-full py-5 bg-emerald-700 text-white rounded-xl font-black text-xl uppercase italic shadow-lg flex justify-center items-center gap-2 disabled:bg-stone-300">
+                                            {isSubmitting ? <Loader2 /> : connStatus === 'Connected' ? 'Register Team' : 'Waiting for connection...'}
                                         </button>
                                     </form>
                                 )}
@@ -217,30 +220,47 @@
                         )}
                     </main>
 
-                    {/* V3.0 SMART STATUS BAR */}
+                    {/* DYNAMIC STATUS BAR - VERSION 4.0 */}
                     <div className={`fixed bottom-0 left-0 right-0 py-3 px-6 text-[10px] font-black uppercase tracking-widest border-t shadow-2xl z-[100] flex flex-col md:flex-row justify-between items-center transition-all duration-500 ${connStatus === 'Connected' ? 'bg-emerald-900 text-emerald-100 border-emerald-800' : 'bg-red-900 text-red-100 border-red-800'}`}>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
                                 <div className={`w-2 h-2 rounded-full ${connStatus === 'Connected' ? 'bg-emerald-400' : 'bg-red-400 status-pulse'}`}></div>
                                 <span>STATUS: {connStatus}</span>
                             </div>
-                            {debugInfo && (
-                                <div className="bg-black/20 px-2 py-1 rounded select-all font-mono opacity-80 max-w-[400px] truncate">
-                                    LOG: {debugInfo}
-                                </div>
-                            )}
+                            {debugInfo && <div className="bg-black/20 px-2 py-1 rounded select-all font-mono opacity-80 max-w-[400px] truncate leading-none">LOG: {debugInfo}</div>}
                         </div>
                         
-                        {connStatus !== 'Connected' && (
-                            <div className="flex items-center gap-3 mt-2 md:mt-0">
-                                <div className="flex gap-1 items-center bg-white/10 px-2 py-1 rounded">
-                                    <AlertTriangle size={12} className="text-amber-400" />
-                                    <span>V3.0 CHECK: DELETE OLD CODE & PASTE NEW</span>
-                                </div>
-                                <button onClick={connect} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded border border-white/20 transition-all uppercase">Forced Retry</button>
+                        <div className="flex items-center gap-3 mt-2 md:mt-0">
+                            {connStatus !== 'Connected' && (
+                                <button onClick={() => setShowRepair(!showRepair)} className="flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-1 rounded border border-white/20 transition-all">
+                                    <Wrench size={10} /> REPAIR TOOL
+                                </button>
+                            )}
+                            <div className="flex items-center gap-2 opacity-50 italic">
+                                 <Settings size={12} /> <span>V4.0 (SHIFT+REFRESH IF WHITE)</span>
                             </div>
-                        )}
+                        </div>
                     </div>
+
+                    {/* REPAIR OVERLAY */}
+                    {showRepair && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-4">
+                                <h3 className="text-xl font-black uppercase italic tracking-tighter text-emerald-900">Emergency Repair Tool</h3>
+                                <p className="text-slate-500 text-sm">If your API Key is invalid, paste the correct <b>apiKey</b> from your Firebase Screenshot below to test it instantly.</p>
+                                <input 
+                                    className="w-full p-4 bg-stone-100 rounded-xl border border-stone-200 font-mono text-xs outline-none focus:ring-2 focus:ring-emerald-500" 
+                                    placeholder="Paste API Key here..."
+                                    value={repairKey}
+                                    onChange={(e) => setRepairKey(e.target.value)}
+                                />
+                                <div className="flex gap-2 pt-2">
+                                    <button onClick={handleRepair} className="flex-1 bg-emerald-700 text-white font-black py-3 rounded-xl uppercase italic">Apply & Test</button>
+                                    <button onClick={() => setShowRepair(false)} className="px-4 bg-stone-200 text-stone-600 font-black rounded-xl uppercase italic">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
