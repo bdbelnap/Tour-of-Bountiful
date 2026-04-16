@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Stable Firebase Compat Scripts -->
+    <!-- Stable Firebase Scripts -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -28,14 +28,15 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
         
-        // YOUR FIREBASE KEYS
+        // --- HAND-TYPED KEYS FROM YOUR SCREENSHOT ---
         const firebaseConfig = {
             apiKey: "AIzaSyCdVLXV3UNVkgusZ8UcaYXAKDjw-aH3-iE",
             authDomain: "tour-of-bountiful.firebaseapp.com",
             projectId: "tour-of-bountiful",
             storageBucket: "tour-of-bountiful.firebasestorage.app",
             messagingSenderId: "805576976058",
-            appId: "1:805576976058:web:076572b23cf4f1b23dc483"
+            appId: "1:805576976058:web:076572b23cf4f1b23dc483",
+            measurementId: "G-5DPMZ6H2DT"
         };
 
         const MAX_TEAMS = 9;
@@ -53,7 +54,7 @@
         const App = () => {
             const [db, setDb] = useState(null);
             const [user, setUser] = useState(null);
-            const [connStatus, setConnStatus] = useState("Initializing...");
+            const [connStatus, setConnStatus] = useState("Connecting...");
             const [view, setView] = useState('home');
             const [registrations, setRegistrations] = useState([]);
             const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +70,6 @@
                     const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
                     const _db = firebase.firestore();
                     const _auth = firebase.auth();
-                    
                     setDb(_db);
                     
                     _auth.signInAnonymously()
@@ -77,38 +77,31 @@
                             setUser(cred.user);
                             setConnStatus("Connected");
                         })
-                        .catch(err => {
-                            console.error(err);
-                            // THIS WILL SHOW THE EXACT ERROR MESSAGE
-                            setConnStatus(`Auth Error: ${err.message}`);
-                        });
+                        .catch(err => setConnStatus(`Auth Error: ${err.message}`));
 
                     _db.collection("registrations").onSnapshot(
                         (snap) => {
                             setRegistrations(snap.docs.map(d => ({id: d.id, ...d.data()})));
-                            if (connStatus !== "Connected") setConnStatus("Connected");
+                            setConnStatus("Connected");
                         },
-                        (err) => {
-                            console.error(err);
-                            setConnStatus(`DB Error: ${err.message}`);
-                        }
+                        (err) => setConnStatus(`DB Error: ${err.message}`)
                     );
-                } catch (e) { setConnStatus("Error: Check Config"); }
+                } catch (e) { setConnStatus("Error: Configuration Failed"); }
             };
 
             useEffect(() => {
                 connect();
-                const timer = setInterval(() => { if (connStatus.includes('Error') || connStatus === 'Initializing...') connect(); }, 5000);
+                const timer = setInterval(() => { if (connStatus !== "Connected") connect(); }, 5000);
                 setTimeout(() => lucide.createIcons(), 500);
                 return () => clearInterval(timer);
-            }, []);
+            }, [connStatus]);
 
             useEffect(() => { lucide.createIcons(); }, [view, registrations, showSuccess, connStatus]);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (connStatus !== "Connected") {
-                    alert(`Status: ${connStatus}`);
+                    alert(`Status: ${connStatus}. Please wait for the green light.`);
                     return;
                 }
                 setIsSubmitting(true);
@@ -121,9 +114,7 @@
                     }
                     setShowSuccess(true);
                     setTimeout(() => { setShowSuccess(false); setView('players'); setEditingId(null); }, 2000);
-                } catch (err) { 
-                    alert(`Submission failed: ${err.message}`);
-                }
+                } catch (err) { alert(`Error: ${err.message}`); }
                 setIsSubmitting(false);
             };
 
@@ -138,8 +129,8 @@
                                 <span className="font-bold text-xl uppercase italic tracking-tighter">Tour of <span className="text-emerald-700">Bountiful</span></span>
                             </div>
                             <div className="flex items-center gap-6">
-                                <button onClick={() => setView('players')} className="text-[10px] font-black uppercase text-slate-500">The Field</button>
-                                <button onClick={() => { setView('register'); setEditingId(null); }} className="px-4 py-2 rounded-lg font-black text-[10px] uppercase italic bg-emerald-700 text-white shadow-md">Sign Up</button>
+                                <button onClick={() => setView('players')} className="text-[10px] font-black uppercase text-slate-500 hover:text-emerald-700">The Field</button>
+                                <button onClick={() => { setView('register'); setEditingId(null); }} className="px-4 py-2 rounded-lg font-black text-[10px] uppercase italic bg-emerald-700 text-white shadow-md hover:bg-emerald-800">Sign Up</button>
                             </div>
                         </div>
                     </nav>
@@ -154,17 +145,17 @@
                                         <div className="flex items-center gap-2 mb-6 uppercase tracking-widest text-[10px] font-black text-emerald-400"><Calendar /> {TOURNAMENT_DATE}</div>
                                         <h1 className="text-6xl md:text-8xl font-black mb-2 uppercase italic leading-none tracking-tighter">Tour of <br/><span className="text-emerald-400">Bountiful</span></h1>
                                         <p className="text-2xl font-black mb-8 uppercase italic opacity-90 tracking-tighter">54 holes.</p>
-                                        <button onClick={() => setView('register')} className="bg-white text-emerald-900 px-10 py-5 rounded-xl font-black text-xl uppercase italic shadow-xl tracking-tighter">Sign My Team Up</button>
+                                        <button onClick={() => setView('register')} className="bg-white text-emerald-900 px-10 py-5 rounded-xl font-black text-xl uppercase italic shadow-xl tracking-tighter hover:bg-stone-50 transition-all">Sign My Team Up</button>
                                     </div>
                                 </section>
                                 <div className="grid md:grid-cols-2 gap-8">
                                     <div className="bg-white p-10 rounded-[2.5rem] border border-stone-200 shadow-sm flex gap-6">
                                         <div className="text-emerald-700 bg-emerald-50 p-4 rounded-xl h-fit"><Target size={32} /></div>
-                                        <div><h3 className="text-2xl font-black uppercase italic mb-2">Net Score Wins</h3><p className="text-slate-500 text-sm">Every stroke counts across Eaglewood, Bountiful Ridge, and Lakeside.</p></div>
+                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Net Score Wins</h3><p className="text-slate-500 text-sm">Every stroke counts across Eaglewood, Bountiful Ridge, and Lakeside.</p></div>
                                     </div>
                                     <div className="bg-white p-10 rounded-[2.5rem] border border-stone-200 shadow-sm flex gap-6">
                                         <div className="bg-emerald-50 p-4 rounded-xl h-fit text-emerald-700 italic font-black text-2xl flex items-center justify-center">$</div>
-                                        <div><h3 className="text-2xl font-black uppercase italic mb-2">Prize Pool</h3><p className="text-slate-500 text-sm">Low net total takes the pot. Stakes collected at the first tee.</p></div>
+                                        <div><h3 className="text-2xl font-black uppercase italic mb-2 tracking-tighter">Prize Pool</h3><p className="text-slate-500 text-sm">Low net total takes the pot. Stakes collected at the first tee.</p></div>
                                     </div>
                                 </div>
                             </div>
@@ -199,7 +190,7 @@
                             <div className="max-w-4xl mx-auto space-y-8">
                                 <div className="text-center"><h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">The Field</h2><p className="text-emerald-700 font-black uppercase text-[10px] mt-2">{registrations.length} Teams Confirmed</p></div>
                                 <div className="grid gap-6">
-                                    {registrations.length === 0 ? <div className="text-center py-20 bg-white rounded-[2rem] border border-stone-200 text-slate-300 font-black uppercase italic text-2xl tracking-tighter leading-none">No teams yet</div> : registrations.map(reg => (
+                                    {registrations.length === 0 ? <div className="text-center py-20 bg-white rounded-[2rem] border border-stone-200 text-slate-300 font-black uppercase italic text-2xl tracking-tighter">No teams yet</div> : registrations.map(reg => (
                                         <div key={reg.id} className="bg-white p-8 rounded-[2rem] border border-stone-200 shadow-sm hover:border-emerald-500 transition-all group">
                                             <div className="flex justify-between items-center mb-6 pb-6 border-b border-stone-100">
                                                 <h3 className="font-black text-3xl uppercase italic tracking-tighter leading-none">{reg.teamName}</h3>
@@ -233,7 +224,7 @@
                             {user && <span>ID: {user.uid.substring(0,8)}</span>}
                         </div>
                         <div className="flex items-center gap-2 opacity-50 italic">
-                             <Settings size={12} /> <span>V2.4 DIAGNOSTIC ACTIVE</span>
+                             <Settings size={12} /> <span>V2.5 FINAL MASTER</span>
                         </div>
                     </div>
                 </div>
