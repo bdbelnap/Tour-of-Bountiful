@@ -39,11 +39,6 @@
             measurementId: "G-5DPMZ6H2DT"
         };
 
-        // This removes any hidden spaces or characters
-        const firebaseConfig = Object.fromEntries(
-            Object.entries(rawKeys).map(([k, v]) => [k, String(v).trim()])
-        );
-
         const MAX_TEAMS = 9;
         const TOURNAMENT_DATE = "Date TBD";
 
@@ -70,11 +65,18 @@
             const [repairKey, setRepairKey] = useState("");
             const [formData, setFormData] = useState({ teamName: '', email: '', p1Name: '', p1Handicap: '', p2Name: '', p2Handicap: '', p3Name: '', p3Handicap: '', p4Name: '', p4Handicap: '' });
 
-            const connect = (config = firebaseConfig) => {
+            const connect = (apiKeyOverride = null) => {
                 if (!window.firebase) return;
                 try {
                     if (firebase.apps.length) firebase.apps.forEach(app => app.delete());
-                    const app = firebase.initializeApp(config);
+                    
+                    const finalConfig = { ...rawKeys };
+                    if (apiKeyOverride) finalConfig.apiKey = apiKeyOverride.trim();
+                    
+                    // Force trim all values to prevent typo errors
+                    Object.keys(finalConfig).forEach(key => finalConfig[key] = String(finalConfig[key]).trim());
+
+                    const app = firebase.initializeApp(finalConfig);
                     const _db = firebase.firestore();
                     const _auth = firebase.auth();
                     setDb(_db);
@@ -94,7 +96,6 @@
                     _db.collection("registrations").onSnapshot(
                         (snap) => {
                             setRegistrations(snap.docs.map(d => ({id: d.id, ...d.data()})));
-                            // Only set connected if auth also succeeded
                         },
                         (err) => {
                             setDebugInfo(`DB Error: ${err.message}`);
@@ -115,8 +116,8 @@
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (!user) {
-                    alert("Error: Website is not fully connected to the database identity service. Please wait for the green light at the bottom.");
+                if (!user || !db) {
+                    alert("Error: Website is not fully connected. Check the status bar at the bottom.");
                     return;
                 }
                 setIsSubmitting(true);
@@ -129,13 +130,8 @@
                     await db.collection("registrations").add(data);
                     setShowSuccess(true);
                     setTimeout(() => { setShowSuccess(false); setView('players'); }, 2000);
-                } catch (err) { alert(`Error: ${err.message}`); }
+                } catch (err) { alert(`Registration failed: ${err.message}`); }
                 setIsSubmitting(false);
-            };
-
-            const handleRepair = () => {
-                const newConfig = { ...firebaseConfig, apiKey: repairKey.trim() };
-                connect(newConfig);
             };
 
             return (
@@ -163,7 +159,7 @@
                                         <div className="flex items-center gap-2 mb-6 uppercase tracking-widest text-[10px] font-black text-emerald-400"><Calendar /> {TOURNAMENT_DATE}</div>
                                         <h1 className="text-6xl md:text-8xl font-black mb-2 uppercase italic leading-none tracking-tighter">Tour of <br/><span className="text-emerald-400">Bountiful</span></h1>
                                         <p className="text-2xl font-black mb-8 uppercase italic opacity-90 tracking-tighter">54 holes.</p>
-                                        <button onClick={() => setView('register')} className="bg-white text-emerald-900 px-10 py-5 rounded-xl font-black text-xl uppercase italic shadow-xl hover:bg-stone-50 transition-all">Sign My Team Up</button>
+                                        <button onClick={() => setView('register')} className="bg-white text-emerald-900 px-10 py-5 rounded-xl font-black text-xl uppercase italic shadow-xl tracking-tighter hover:bg-stone-50 transition-all">Sign My Team Up</button>
                                     </div>
                                 </section>
                                 <div className="grid md:grid-cols-2 gap-8">
@@ -197,7 +193,7 @@
                                             ))}
                                         </div>
                                         <button type="submit" disabled={isSubmitting || !user} className="w-full py-5 bg-emerald-700 text-white rounded-xl font-black text-xl uppercase italic shadow-lg flex justify-center items-center gap-2 disabled:bg-stone-300">
-                                            {isSubmitting ? <Loader2 /> : user ? 'Register Team' : 'Waiting for ID...'}
+                                            {isSubmitting ? <Loader2 /> : user ? 'Register Team' : 'Connecting to Database...'}
                                         </button>
                                     </form>
                                 )}
@@ -212,7 +208,7 @@
                                         <div key={reg.id} className="bg-white p-8 rounded-[2rem] border border-stone-200 shadow-sm hover:border-emerald-500 transition-all group">
                                             <div className="flex justify-between items-center mb-6 pb-6 border-b border-stone-100">
                                                 <h3 className="font-black text-3xl uppercase italic tracking-tighter leading-none">{reg.teamName}</h3>
-                                                <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase italic tracking-tighter">Locked In</div>
+                                                <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase italic tracking-tighter uppercase tracking-widest">Locked In</div>
                                             </div>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                 {[1, 2, 3, 4].map(n => (
@@ -229,9 +225,8 @@
                         )}
                     </main>
 
-                    {/* V5.0 THE FIXER STATUS BAR */}
                     <div className={`fixed bottom-0 left-0 right-0 py-3 px-6 text-[10px] font-black uppercase tracking-widest border-t shadow-2xl z-[100] flex flex-col md:flex-row justify-between items-center transition-all duration-500 ${user ? 'bg-emerald-900 text-emerald-100 border-emerald-800' : 'bg-red-900 text-red-100 border-red-800'}`}>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 text-center md:text-left">
                             <div className="flex items-center gap-2">
                                 <div className={`w-2 h-2 rounded-full ${user ? 'bg-emerald-400' : 'bg-red-400 status-pulse'}`}></div>
                                 <span>STATUS: {user ? 'Connected & Ready' : connStatus}</span>
@@ -246,7 +241,7 @@
                                 </button>
                             )}
                             <div className="flex items-center gap-2 opacity-50 italic">
-                                 <Settings size={12} /> <span>V5.0 THE FIXER (SHIFT+REFRESH)</span>
+                                 <Settings size={12} /> <span>V5.1 FINAL SHIELD</span>
                             </div>
                         </div>
                     </div>
@@ -254,7 +249,7 @@
                     {showRepair && (
                         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
                             <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-4">
-                                <h3 className="text-xl font-black uppercase italic text-emerald-900 leading-none">Fix Invalid Key</h3>
+                                <h3 className="text-xl font-black uppercase italic text-emerald-900 leading-none">Manual Key Repair</h3>
                                 <p className="text-slate-500 text-sm">Paste the <b>apiKey</b> from your Firebase Screenshot exactly as it appears:</p>
                                 <input 
                                     className="w-full p-4 bg-stone-100 rounded-xl border border-stone-200 font-mono text-xs outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800" 
@@ -263,7 +258,7 @@
                                     onChange={(e) => setRepairKey(e.target.value)}
                                 />
                                 <div className="flex gap-2 pt-2">
-                                    <button onClick={handleRepair} className="flex-1 bg-emerald-700 text-white font-black py-3 rounded-xl uppercase italic">Apply Fix</button>
+                                    <button onClick={() => connect(repairKey)} className="flex-1 bg-emerald-700 text-white font-black py-3 rounded-xl uppercase italic">Apply Fix</button>
                                     <button onClick={() => setShowRepair(false)} className="px-4 bg-stone-200 text-stone-600 font-black rounded-xl uppercase italic">Close</button>
                                 </div>
                             </div>
